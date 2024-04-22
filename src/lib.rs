@@ -29,6 +29,9 @@ impl Bounds for DefaultBounds {}
 pub struct InnerBounds(Rect);
 impl Bounds for InnerBounds {}
 
+pub struct OuterBounds(Rect);
+impl Bounds for OuterBounds {}
+
 #[must_use]
 pub struct Builder<'f, 't, B: Bounds> {
     font: &'f Font,
@@ -63,11 +66,32 @@ impl<'f, 't> Builder<'f, 't, DefaultBounds> {
             bounds: InnerBounds(bounds),
         }
     }
+
+    pub fn bounds_outer(self, bounds: Rect) -> Builder<'f, 't, OuterBounds> {
+        Builder {
+            font: self.font,
+            text: self.text,
+            color: self.color,
+            size: self.size,
+            halign: self.halign,
+            valign: self.valign,
+            bounds: OuterBounds(bounds),
+        }
+    }
+
+    pub fn build<'l>(self, layout: &'l mut Layout, [canvas_width, canvas_height]: [f32; 2]) -> Result<TextBox<'f, 'l>, Error> {
+        let inner_bounds = Rect::from_xywh(0.0, 0.0, canvas_width, canvas_height).ok_or(Error::Rect)?.inset(self.size / 2.0, self.size / 2.0).ok_or(Error::Inset)?;
+        Ok(self.bounds_inner(inner_bounds).build(layout))
+    }
 }
 
 impl<'f, 't, B: Bounds> Builder<'f, 't, B> {
     pub fn color(self, color: Color) -> Self {
         Self { color, ..self }
+    }
+
+    pub fn size(self, size: f32) -> Self {
+        Self { size, ..self }
     }
 
     pub fn halign(self, halign: HorizontalAlign) -> Self {
@@ -100,6 +124,25 @@ impl<'f, 't> Builder<'f, 't, InnerBounds> {
             inner_bounds: self.bounds.0,
             layout,
         }
+    }
+}
+
+impl<'f, 't> Builder<'f, 't, OuterBounds> {
+    fn bounds_inner(self, bounds: Rect) -> Builder<'f, 't, InnerBounds> {
+        Builder {
+            font: self.font,
+            text: self.text,
+            color: self.color,
+            size: self.size,
+            halign: self.halign,
+            valign: self.valign,
+            bounds: InnerBounds(bounds),
+        }
+    }
+
+    pub fn build<'l>(self, layout: &'l mut Layout) -> Result<TextBox<'f, 'l>, Error> {
+        let inner_bounds = self.bounds.0.inset(self.size / 2.0, self.size / 2.0).ok_or(Error::Inset)?;
+        Ok(self.bounds_inner(inner_bounds).build(layout))
     }
 }
 
@@ -169,6 +212,8 @@ impl TextBox<'_, '_> {
 pub enum Error {
     #[error("failed to create glyph canvas")]
     GlyphPixmap,
+    #[error("failed to inset text rect")]
+    Inset,
     #[error("failed to outset text rect")]
     Outset,
     #[error("failed to calculate text dimensions")]

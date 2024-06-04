@@ -1,6 +1,6 @@
 [package]
 name = "text"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lints.rust]
@@ -14,8 +14,8 @@ unused_qualifications = "deny"
 warnings = "deny"
 
 [dependencies]
-fontdue = { version = "0.8.0", features = ["parallel"] }
-itertools = "0.12.1"
+fontdue = { version = "0.9", features = ["parallel"] }
+itertools = "0.13"
 noisy_float = "0.2.0"
 thiserror = "1.0.59"
 tiny-skia = "0.11.4"

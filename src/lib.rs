@@ -32,12 +32,26 @@ impl Bounds for InnerBounds {}
 pub struct OuterBounds(Rect);
 impl Bounds for OuterBounds {}
 
+pub trait IntoColor {
+    fn into_color_u8(self) -> ColorU8;
+}
+
+impl IntoColor for Color {
+    fn into_color_u8(self) -> ColorU8 {
+        self.to_color_u8()
+    }
+}
+
+impl IntoColor for ColorU8 {
+    fn into_color_u8(self) -> ColorU8 { self }
+}
+
 #[must_use]
 pub struct Builder<'f, 't, B: Bounds> {
     font: &'f Font,
     text: &'t str,
     bounds: B,
-    color: Color,
+    color: ColorU8,
     size: f32,
     halign: HorizontalAlign,
     valign: VerticalAlign,
@@ -47,7 +61,7 @@ impl<'f, 't> Builder<'f, 't, DefaultBounds> {
     pub fn new(font: &'f Font, text: &'t str) -> Self {
         Self {
             bounds: DefaultBounds,
-            color: Color::WHITE,
+            color: Color::WHITE.to_color_u8(),
             size: DEFAULT_SIZE,
             halign: HorizontalAlign::Center,
             valign: VerticalAlign::Middle,
@@ -86,8 +100,11 @@ impl<'f, 't> Builder<'f, 't, DefaultBounds> {
 }
 
 impl<'f, 't, B: Bounds> Builder<'f, 't, B> {
-    pub fn color(self, color: Color) -> Self {
-        Self { color, ..self }
+    pub fn color(self, color: impl IntoColor) -> Self {
+        Self {
+            color: color.into_color_u8(),
+            ..self
+        }
     }
 
     pub fn size(self, size: f32) -> Self {
@@ -151,7 +168,7 @@ pub struct TextBox<'f, 'l> {
     font: &'f Font,
     layout: &'l mut Layout,
     inner_bounds: Rect,
-    color: Color,
+    color: ColorU8,
     size: f32,
     halign: HorizontalAlign,
     valign: VerticalAlign,
@@ -187,16 +204,15 @@ impl TextBox<'_, '_> {
     }
 
     pub fn draw(&self, mut canvas: PixmapMut<'_>, glyph_cache: &mut HashMap<(GlyphRasterConfig, [u8; 4]), Pixmap>) -> Result<(), Error> {
-        let color_u8 = self.color.to_color_u8();
         for glyph in self.layout.glyphs() {
             if glyph.width > 0 && glyph.height > 0 {
-                match glyph_cache.entry((glyph.key, [color_u8.red(), color_u8.green(), color_u8.blue(), color_u8.alpha()])) {
+                match glyph_cache.entry((glyph.key, [self.color.red(), self.color.green(), self.color.blue(), self.color.alpha()])) {
                     hash_map::Entry::Occupied(entry) => canvas.draw_pixmap(0, 0, entry.get().as_ref(), &PixmapPaint::default(), Transform::from_translate(glyph.x, glyph.y), None),
                     hash_map::Entry::Vacant(entry) => {
                         let (_, data) = self.font.rasterize_config(glyph.key);
                         let mut glyph_canvas = Pixmap::new(glyph.width as u32, glyph.height as u32).ok_or(Error::GlyphPixmap)?;
                         for (alpha, pixel) in data.into_iter().zip_eq(glyph_canvas.pixels_mut()) {
-                            *pixel = ColorU8::from_rgba(color_u8.red(), color_u8.green(), color_u8.blue(), (u16::from(color_u8.alpha()) * u16::from(alpha) / 255) as u8).premultiply();
+                            *pixel = ColorU8::from_rgba(self.color.red(), self.color.green(), self.color.blue(), (u16::from(self.color.alpha()) * u16::from(alpha) / 255) as u8).premultiply();
                         }
                         canvas.draw_pixmap(0, 0, glyph_canvas.as_ref(), &PixmapPaint::default(), Transform::from_translate(glyph.x, glyph.y), None);
                         entry.insert(glyph_canvas);

@@ -16,6 +16,7 @@ use {
     },
     itertools::Itertools as _,
     noisy_float::prelude::*,
+    nonempty_collections::NEVec,
     tiny_skia::*,
 };
 
@@ -48,7 +49,7 @@ impl IntoColor for ColorU8 {
 
 #[must_use]
 pub struct Builder<'f, 't, B: Bounds> {
-    font: &'f Font,
+    fonts: NEVec<&'f Font>,
     text: &'t str,
     bounds: B,
     color: ColorU8,
@@ -60,18 +61,19 @@ pub struct Builder<'f, 't, B: Bounds> {
 impl<'f, 't> Builder<'f, 't, DefaultBounds> {
     pub fn new(font: &'f Font, text: &'t str) -> Self {
         Self {
+            fonts: NEVec::new(font),
             bounds: DefaultBounds,
             color: Color::WHITE.to_color_u8(),
             size: DEFAULT_SIZE,
             halign: HorizontalAlign::Center,
             valign: VerticalAlign::Middle,
-            font, text,
+            text,
         }
     }
 
     pub fn bounds_inner(self, bounds: Rect) -> Builder<'f, 't, InnerBounds> {
         Builder {
-            font: self.font,
+            fonts: self.fonts,
             text: self.text,
             color: self.color,
             size: self.size,
@@ -83,7 +85,7 @@ impl<'f, 't> Builder<'f, 't, DefaultBounds> {
 
     pub fn bounds_outer(self, bounds: Rect) -> Builder<'f, 't, OuterBounds> {
         Builder {
-            font: self.font,
+            fonts: self.fonts,
             text: self.text,
             color: self.color,
             size: self.size,
@@ -100,6 +102,11 @@ impl<'f, 't> Builder<'f, 't, DefaultBounds> {
 }
 
 impl<'f, 't, B: Bounds> Builder<'f, 't, B> {
+    pub fn fallback_font(mut self, font: &'f Font) -> Self {
+        self.fonts.push(font);
+        self
+    }
+
     pub fn color(self, color: impl IntoColor) -> Self {
         Self {
             color: color.into_color_u8(),
@@ -131,9 +138,11 @@ impl<'f, 't> Builder<'f, 't, InnerBounds> {
             vertical_align: self.valign,
             ..LayoutSettings::default()
         });
-        layout.append(std::slice::from_ref(self.font), &TextStyle::new(self.text, self.size, 0));
+        for (font_idx, segment) in &self.text.chars().chunk_by(|c| self.fonts.iter().position(|font| font.has_glyph(*c)).unwrap_or_default()) {
+            layout.append(self.fonts.as_ref(), &TextStyle::new(&segment.collect::<String>(), self.size, font_idx));
+        }
         TextBox {
-            font: self.font,
+            fonts: self.fonts,
             color: self.color,
             size: self.size,
             halign: self.halign,
@@ -147,7 +156,7 @@ impl<'f, 't> Builder<'f, 't, InnerBounds> {
 impl<'f, 't> Builder<'f, 't, OuterBounds> {
     fn bounds_inner(self, bounds: Rect) -> Builder<'f, 't, InnerBounds> {
         Builder {
-            font: self.font,
+            fonts: self.fonts,
             text: self.text,
             color: self.color,
             size: self.size,
@@ -165,7 +174,7 @@ impl<'f, 't> Builder<'f, 't, OuterBounds> {
 
 #[must_use]
 pub struct TextBox<'f, 'l> {
-    font: &'f Font,
+    fonts: NEVec<&'f Font>,
     layout: &'l mut Layout,
     inner_bounds: Rect,
     color: ColorU8,
@@ -209,7 +218,7 @@ impl TextBox<'_, '_> {
                 match glyph_cache.entry((glyph.key, [self.color.red(), self.color.green(), self.color.blue(), self.color.alpha()])) {
                     hash_map::Entry::Occupied(entry) => canvas.draw_pixmap(0, 0, entry.get().as_ref(), &PixmapPaint::default(), Transform::from_translate(glyph.x, glyph.y), None),
                     hash_map::Entry::Vacant(entry) => {
-                        let (_, data) = self.font.rasterize_config(glyph.key);
+                        let (_, data) = self.fonts[glyph.font_index].rasterize_config(glyph.key);
                         let mut glyph_canvas = Pixmap::new(glyph.width as u32, glyph.height as u32).ok_or(Error::GlyphPixmap)?;
                         for (alpha, pixel) in data.into_iter().zip_eq(glyph_canvas.pixels_mut()) {
                             *pixel = ColorU8::from_rgba(self.color.red(), self.color.green(), self.color.blue(), (u16::from(self.color.alpha()) * u16::from(alpha) / 255) as u8).premultiply();

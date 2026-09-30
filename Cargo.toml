@@ -2,7 +2,7 @@
 name = "text"
 version = "0.2.1"
 edition = "2024"
-rust-version = "1.91" # nixpkgs stable
+rust-version = "1.95" # nixpkgs stable
 
 [lints.rust]
 rust_2018_idioms = "deny"
@@ -16,7 +16,7 @@ warnings = "deny"
 
 [dependencies]
 fontdue = { version = "0.9", features = ["parallel"] }
-itertools = "0.14"
+itertools = "0.15"
 noisy_float = "0.2"
 nonempty-collections = "1"
 thiserror = "2"

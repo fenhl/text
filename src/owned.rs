@@ -18,25 +18,22 @@ use {
             VerticalAlign,
         },
     },
-    itertools::Itertools as _,
-    noisy_float::prelude::*,
     nonempty_collections::NEVec,
-    tiny_skia::*,
     crate::*,
 };
 
 #[must_use]
-pub struct Builder<B: Bounds> {
+pub struct Builder<F: const PixelFormat, B: Bounds> {
     fonts: NEVec<Arc<Font>>,
     text: Cow<'static, str>,
     bounds: B,
-    color: ColorU8,
+    color: ColorU8<F>,
     size: f32,
     halign: HorizontalAlign,
     valign: VerticalAlign,
 }
 
-impl Builder<DefaultBounds> {
+impl<F: const PixelFormat> Builder<F, DefaultBounds> {
     pub fn new(font: Arc<Font>, text: impl Into<Cow<'static, str>>) -> Self {
         Self {
             fonts: NEVec::new(font),
@@ -49,7 +46,7 @@ impl Builder<DefaultBounds> {
         }
     }
 
-    pub fn bounds_inner(self, bounds: Rect) -> Builder<InnerBounds> {
+    pub fn bounds_inner(self, bounds: Rect) -> Builder<F, InnerBounds> {
         Builder {
             fonts: self.fonts,
             text: self.text,
@@ -61,7 +58,7 @@ impl Builder<DefaultBounds> {
         }
     }
 
-    pub fn bounds_outer(self, bounds: Rect) -> Builder<OuterBounds> {
+    pub fn bounds_outer(self, bounds: Rect) -> Builder<F, OuterBounds> {
         Builder {
             fonts: self.fonts,
             text: self.text,
@@ -73,13 +70,13 @@ impl Builder<DefaultBounds> {
         }
     }
 
-    pub fn build(self, layout: Layout, [canvas_width, canvas_height]: [f32; 2]) -> Result<TextBox, Error> {
+    pub fn build(self, layout: Layout, [canvas_width, canvas_height]: [f32; 2]) -> Result<TextBox<F>, Error> {
         let inner_bounds = Rect::from_xywh(0.0, 0.0, canvas_width, canvas_height).ok_or(Error::Rect)?.inset(self.size / 2.0, self.size / 2.0).ok_or(Error::Inset)?;
         Ok(self.bounds_inner(inner_bounds).build(layout))
     }
 }
 
-impl<B: Bounds> Builder<B> {
+impl<F: const PixelFormat, B: Bounds> Builder<F, B> {
     pub fn fallback_font(mut self, font: Arc<Font>) -> Self {
         self.fonts.push(font);
         self
@@ -105,8 +102,8 @@ impl<B: Bounds> Builder<B> {
     }
 }
 
-impl Builder<InnerBounds> {
-    pub fn build(self, mut layout: Layout) -> TextBox {
+impl<F: const PixelFormat> Builder<F, InnerBounds> {
+    pub fn build(self, mut layout: Layout) -> TextBox<F> {
         layout.reset(&LayoutSettings {
             x: self.bounds.0.x(),
             y: self.bounds.0.y(),
@@ -131,8 +128,8 @@ impl Builder<InnerBounds> {
     }
 }
 
-impl Builder<OuterBounds> {
-    fn bounds_inner(self, bounds: Rect) -> Builder<InnerBounds> {
+impl<F: const PixelFormat> Builder<F, OuterBounds> {
+    fn bounds_inner(self, bounds: Rect) -> Builder<F, InnerBounds> {
         Builder {
             fonts: self.fonts,
             text: self.text,
@@ -144,24 +141,24 @@ impl Builder<OuterBounds> {
         }
     }
 
-    pub fn build(self, layout: Layout) -> Result<TextBox, Error> {
+    pub fn build(self, layout: Layout) -> Result<TextBox<F>, Error> {
         let inner_bounds = self.bounds.0.inset(self.size / 2.0, self.size / 2.0).ok_or(Error::Inset)?;
         Ok(self.bounds_inner(inner_bounds).build(layout))
     }
 }
 
 #[must_use]
-pub struct TextBox {
+pub struct TextBox<F: const PixelFormat> {
     fonts: NEVec<Arc<Font>>,
     layout: Layout,
     inner_bounds: Rect,
-    color: ColorU8,
+    color: ColorU8<F>,
     size: f32,
     halign: HorizontalAlign,
     valign: VerticalAlign,
 }
 
-impl TextBox {
+impl<F: const PixelFormat> TextBox<F> {
     #[must_use]
     pub fn rect_inner(&self) -> Result<Rect, Error> {
         let width = self.layout.lines()
@@ -190,7 +187,7 @@ impl TextBox {
         self.rect_inner()?.outset(self.size / 2.0, self.size / 2.0).ok_or(Error::Outset)
     }
 
-    pub fn draw_ref(&self, mut canvas: PixmapMut<'_>, glyph_cache: &mut HashMap<(GlyphRasterConfig, [u8; 4]), Pixmap>) -> Result<(), Error> {
+    pub fn draw_ref(&self, mut canvas: PixmapMut<'_, F>, glyph_cache: &mut HashMap<(GlyphRasterConfig, [u8; 4]), Pixmap<F>>) -> Result<(), Error> {
         for glyph in self.layout.glyphs() {
             if glyph.width > 0 && glyph.height > 0 {
                 match glyph_cache.entry((glyph.key, [self.color.red(), self.color.green(), self.color.blue(), self.color.alpha()])) {
@@ -211,7 +208,7 @@ impl TextBox {
     }
 
     #[must_use]
-    pub fn draw(self, canvas: PixmapMut<'_>, glyph_cache: &mut HashMap<(GlyphRasterConfig, [u8; 4]), Pixmap>) -> Result<Layout, Error> {
+    pub fn draw(self, canvas: PixmapMut<'_, F>, glyph_cache: &mut HashMap<(GlyphRasterConfig, [u8; 4]), Pixmap<F>>) -> Result<Layout, Error> {
         self.draw_ref(canvas, glyph_cache)?;
         Ok(self.layout)
     }

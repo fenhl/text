@@ -33,6 +33,19 @@ pub struct Builder<F: const PixelFormat, B: Bounds> {
     valign: VerticalAlign,
 }
 
+impl<F: const PixelFormat, B: Bounds> PartialEq for Builder<F, B> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self { fonts, text, bounds, color, size, halign, valign } = self;
+        fonts.iter().zip_longest(&other.fonts).all(|entry| entry.both().is_some_and(|(l, r)| l.name() == r.name() && l.units_per_em() == r.units_per_em()))
+        && *text == other.text
+        && *bounds == other.bounds
+        && *color == other.color
+        && *size == other.size
+        && *halign == other.halign
+        && *valign == other.valign
+    }
+}
+
 impl<F: const PixelFormat> Builder<F, DefaultBounds> {
     pub fn new(font: Arc<Font>, text: impl Into<Cow<'static, str>>) -> Self {
         Self {

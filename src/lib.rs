@@ -26,14 +26,17 @@ pub mod owned;
 
 pub const DEFAULT_SIZE: f32 = 24.0;
 
-pub trait Bounds {}
+pub trait Bounds: PartialEq {}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DefaultBounds;
 impl Bounds for DefaultBounds {}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct InnerBounds(Rect);
 impl Bounds for InnerBounds {}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OuterBounds(Rect);
 impl Bounds for OuterBounds {}
 

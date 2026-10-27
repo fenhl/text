@@ -15,6 +15,7 @@ unused_qualifications = "deny"
 warnings = "deny"
 
 [dependencies]
+derive-where = "1"
 fontdue = { version = "0.9", features = ["parallel"] }
 itertools = "0.15"
 noisy_float = "0.2"

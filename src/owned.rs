@@ -23,6 +23,7 @@ use {
 };
 
 #[must_use]
+#[derive(Clone)]
 pub struct Builder<F: const PixelFormat, B: Bounds> {
     fonts: NEVec<Arc<Font>>,
     text: Cow<'static, str>,
